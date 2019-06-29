@@ -117,7 +117,7 @@ void Dense::dump() {
     cudaMemcpy(w, this->w, sizeof(double)*ic*oc, cudaMemcpyDeviceToHost);
     cudaMemcpy(b, this->b, sizeof(double)*oc, cudaMemcpyDeviceToHost);
 #endif
-    printf("\nDense_%d_%d:\n", ic, oc);
+    printf("Dense_%d_%d:\n", ic, oc);
     int n = ic*5;
     for (int i=0; i<n; i++) printf("-");
     printf(" w ");
