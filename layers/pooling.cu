@@ -2,6 +2,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <time.h>
+#include <float.h>
 
 #include "pooling.h"
 #include "../common.h"
@@ -17,24 +18,24 @@ __global__ void pooling_forward(double *x, double *y, int *p, int c, int ih, int
     int col = blockIdx.x*blockDim.x + threadIdx.x;
     if (row >= oh || col >= ow) return;
     for (int i=0; i<c; i++) {
-        y[oi(i, row, col)] = -MAXFLOAT;
+        y[i*oh*ow + row*ow + col] = -FLT_MAX;
         for (int j=0; j<s; j++) {
             for (int k=0; k<s; k++) {
-                if (x[ii(i, row*s+j, col*s+k)] > y[oi(i, row, col)]) {
-                    y[oi(i, row, col)] = x[ii(i, row*s+j, col*s+k)];
-                    p[oi(i, row, col)] = j*s+k;
+                if (x[i*ih*iw + (row*s+j)*iw + col*s+k] > y[i*oh*ow + row*ow + col]) {
+                    y[i*oh*ow + row*ow + col] = x[i*ih*iw + (row*s+j)*iw + col*s+k];
+                    p[i*oh*ow + row*ow + col] = j*s+k;
                 }
             }
         }
     }
 }
 
-__global__ void pooling_backward(double *delta, double *d, int *p, int c, int oh, int ow, int s) {
+__global__ void pooling_backward(double *delta, double *d, int *p, int c, int ih, int iw, int oh, int ow, int s) {
     int row = blockIdx.y*blockDim.y + threadIdx.y;
     int col = blockIdx.x*blockDim.x + threadIdx.x;
     if (row >= oh || col >= ow) return;
     for (int i=0; i<c; i++) {
-        d[ii(i, row*s + p[oi(i,row,col)]/s, col*s + p[oi(i,row,col)]%s)] = delta[oi(i, row, col)];
+        d[i*ih*iw + (row*s + p[i*oh*ow+row*ow+col]/s)*iw + col*s + p[i*oh*ow+row*ow+col]%s] = delta[i*oh*ow + row*ow + col];
     }
 }
 #endif
@@ -68,7 +69,7 @@ double* Pooling::forward(double *input) {
     cudaMemset(p, 0, sizeof(int)*(c*oh*ow));
     const int TILE = 32/s/s*s;
     dim3 blocks((ow-1)/TILE+1, (oh-1)/TILE+1), threads(TILE, TILE);
-    pooling_forward<<<blocks, threads>>>(x, y, p, c, ih, iw, s);
+    pooling_forward<<<blocks, threads>>>(x, y, p, c, ih, iw, oh, ow, s);
 #else
     memset(p, 0, sizeof(int)*(c*oh*ow));
     for (int i=0; i<c; i++) {
@@ -95,7 +96,7 @@ double* Pooling::backward(double *delta, double lr) {
     cudaMemset(d, 0, sizeof(double) * (c*ih*iw));
     const int TILE = 32/s/s*s;
     dim3 blocks((ow-1)/TILE+1, (oh-1)/TILE+1), threads(TILE, TILE);
-    pooling_backward<<<blocks, threads>>>(delta, d, p, c, oh, ow, s);
+    pooling_backward<<<blocks, threads>>>(delta, d, p, c, ih, iw, oh, ow, s);
 #else
     memset(d, 0, sizeof(double) * (c*ih*iw));
     for (int i=0; i<c; i++) {

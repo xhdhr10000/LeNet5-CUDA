@@ -49,7 +49,7 @@ void test_pooling(double *input, int c, int h, int w, int s) {
 
     double *loss;
     cudaMalloc(&loss, sizeof(double) * c*h/s*w/s);
-    for (int i=0; i<c*h/s*w/s; i++) output[i] = 7;
+    for (int i=0; i<c*h/s*w/s; i++) output[i] = 99;
     printf("\nLoss:\n");
     for (int i=0; i<c; i++) {
         for (int j=0; j<h/s; j++) {
@@ -80,23 +80,24 @@ void test_pooling(double *input, int c, int h, int w, int s) {
 }
 
 int main() {
-    int c = 2, h = 10, w = 10;
+    rand_init();
+    int c = 2, h = 27, w = 27;
     double *input = (double*)malloc(sizeof(double) * c*h*w);
     for (int i=0; i<c*h*w; i++) input[i] = randn();
     double *dinput;
     cudaMalloc(&dinput, sizeof(double) * c*h*w);
     cudaMemcpy(dinput, input, sizeof(double) * c*h*w, cudaMemcpyHostToDevice);
 
-    printf("Input: ");
+    printf("Input:\n");
     for (int i=0; i<c; i++) {
         for (int j=0; j<h; j++) {
-            for (int k=0; k<w; k++) printf("%9.6lf ", input[i]);
+            for (int k=0; k<w; k++) printf("%9.6lf ", input[i*h*w + j*w + k]);
             printf("\n");
         }
         printf("\n");
     }
 
-    test_pooling(dinput, c, h, w, 2);
+    test_pooling(dinput, c, h, w, 3);
 
     free(input);
     cudaFree(dinput);

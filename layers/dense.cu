@@ -15,8 +15,8 @@
 __global__ void dense_init_params(double *w, double *b, int ic) {
     int oi = threadIdx.x;
     curandState t;
-    rand_init(&t, oi);
-    for (int i=0; i<ic; i++) w[oi*ic + i] = randn(&t, oi) / sqrt((double)ic);
+    rand_init_gpu(&t, oi);
+    for (int i=0; i<ic; i++) w[oi*ic + i] = randn_gpu(&t, oi) / sqrt((double)ic);
     b[oi] = 0;
 }
 
