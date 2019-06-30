@@ -126,7 +126,7 @@ void Dense::dump() {
     printf("\n");
     for (int i=0; i<oc; i++) {
         printf("| ");
-        for (int j=0; j<ic; j++) printf("%9.6lf ", w[i*ic+j]);
+        for (int j=0; j<ic; j++) printf("%9.6f ", w[i*ic+j]);
         printf("|\n");
     }
     for (int i=0; i<ic*10+3; i++) printf("-");
@@ -137,7 +137,7 @@ void Dense::dump() {
     printf(" b ");
     for (int i=0; i<n; i++) printf("-");
     printf("\n| ");
-    for (int i=0; i<oc; i++) printf("%9.6lf ", b[i]);
+    for (int i=0; i<oc; i++) printf("%9.6f ", b[i]);
     printf("|\n");
     for (int i=0; i<oc*10+3; i++) printf("-");
     printf("\n\n");

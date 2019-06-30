@@ -16,7 +16,7 @@ __global__ void conv_init_params(float *w, float *b, int ic, int k) {
     int oc = threadIdx.x;
     curandState t;
     rand_init_gpu(&t, oc);
-    for (int i=0; i<ic*k*k; i++) w[oc*ic*k*k + i] = 1;//randn_gpu(&t, oc) / sqrt((float)ic);
+    for (int i=0; i<ic*k*k; i++) w[oc*ic*k*k + i] = randn_gpu(&t, oc) / sqrt((float)ic);
     b[oc] = 0;
 }
 
@@ -158,7 +158,7 @@ void Conv::init_params() {
     this->y = (float*)malloc(sizeof(float) * oc*oh*ow);
 
     rand_init();
-    for (int i=0; i<oc*ic*k*k; i++) w[i] = 1;//randn() / sqrt(ic);
+    for (int i=0; i<oc*ic*k*k; i++) w[i] = randn() / sqrt(ic);
     for (int i=0; i<oc; i++) b[i] = 0;
 #endif
 }
@@ -290,7 +290,7 @@ void Conv::dump() {
     cudaMemcpy(w, this->w, sizeof(float)*oc*ic*k*k, cudaMemcpyDeviceToHost);
     cudaMemcpy(b, this->b, sizeof(float)*oc, cudaMemcpyDeviceToHost);
 #endif
-    printf("Conv_(%d,%d,%d)_(%d,%d,%d)_%d_%d_%d:\n", ic, ih, iw, oc, oh, ow, k, s, p);
+    printf("Conv_i(%d,%d,%d)_o(%d,%d,%d)_k%d_s%d_p%d:\n", ic, ih, iw, oc, oh, ow, k, s, p);
     int n = (k*10-3)/2;
     for (int i=0; i<n; i++) printf("-");
     printf(" w ");
@@ -300,7 +300,7 @@ void Conv::dump() {
         printf("w%d:\n", oc);
         for (int ic=0; ic<this->ic; ic++) {
             for (int i=0; i<k; i++) {
-                for (int j=0; j<k; j++) printf("%9.6lf ", w[wi(oc, ic, i, j)]);
+                for (int j=0; j<k; j++) printf("%9.6f ", w[wi(oc, ic, i, j)]);
                 printf("\n");
             }
             printf("\n");
@@ -312,7 +312,7 @@ void Conv::dump() {
     printf(" b ");
     for (int i=0; i<n; i++) printf("-");
     printf("\n");
-    for (int i=0; i<this->oc; i++) printf("%9.6lf ", b[i]);
+    for (int i=0; i<this->oc; i++) printf("%9.6f ", b[i]);
     printf("\n");
     for (int i=0; i<this->oc*10; i++) printf("-");
     printf("\n\n");
