@@ -4,13 +4,13 @@
 class Conv {
 private:
     int ic, oc, ih, iw, oh, ow, k, s, p;
-    double *w, *b, *x, *y, *d, *dw, *db;
+    float *w, *b, *x, *y, *d, *dw, *db;
 
 public:
     Conv(int input_channels, int input_height, int input_width, int output_channels, int kernel, int stride, int padding);
     ~Conv();
-    double* forward(double *input);
-    double* backward(double *delta, double lr);
+    float* forward(float *input);
+    float* backward(float *delta, float lr);
     void dump();
 
 protected:

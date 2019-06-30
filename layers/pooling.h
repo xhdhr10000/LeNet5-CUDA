@@ -5,13 +5,13 @@ class Pooling {
 private:
     int c, iw, ih, s, ow, oh;
     int *p;
-    double *x, *y, *d;
+    float *x, *y, *d;
 
 public:
     Pooling(int channels, int height, int width, int stride);
     ~Pooling();
-    double* forward(double *input);
-    double* backward(double *delta, double lr);
+    float* forward(float *input);
+    float* backward(float *delta, float lr);
     void dump();
 
 protected:

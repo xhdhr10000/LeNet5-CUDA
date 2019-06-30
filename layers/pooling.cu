@@ -13,7 +13,7 @@
 #endif /* CUDA */
 
 #ifdef CUDA
-__global__ void pooling_forward(double *x, double *y, int *p, int c, int ih, int iw, int oh, int ow, int s) {
+__global__ void pooling_forward(float *x, float *y, int *p, int c, int ih, int iw, int oh, int ow, int s) {
     int row = blockIdx.y*blockDim.y + threadIdx.y;
     int col = blockIdx.x*blockDim.x + threadIdx.x;
     if (row >= oh || col >= ow) return;
@@ -30,7 +30,7 @@ __global__ void pooling_forward(double *x, double *y, int *p, int c, int ih, int
     }
 }
 
-__global__ void pooling_backward(double *delta, double *d, int *p, int c, int ih, int iw, int oh, int ow, int s) {
+__global__ void pooling_backward(float *delta, float *d, int *p, int c, int ih, int iw, int oh, int ow, int s) {
     int row = blockIdx.y*blockDim.y + threadIdx.y;
     int col = blockIdx.x*blockDim.x + threadIdx.x;
     if (row >= oh || col >= ow) return;
@@ -53,17 +53,17 @@ Pooling::Pooling(int channels, int height, int width, int stride) {
 
 void Pooling::init_params(int idx) {
 #ifdef CUDA
-    cudaMalloc(&y, sizeof(double) * (c*oh*ow));
-    cudaMalloc(&d, sizeof(double) * (c*ih*iw));
+    cudaMalloc(&y, sizeof(float) * (c*oh*ow));
+    cudaMalloc(&d, sizeof(float) * (c*ih*iw));
     cudaMalloc(&p, sizeof(int) * (c*oh*ow));
 #else
-    this->y = (double*)malloc(sizeof(double) * (c*oh*ow));
-    this->d = (double*)malloc(sizeof(double) * (c*ih*iw));
+    this->y = (float*)malloc(sizeof(float) * (c*oh*ow));
+    this->d = (float*)malloc(sizeof(float) * (c*ih*iw));
     this->p = (int*)malloc(sizeof(int) * (c*oh*ow));
 #endif
 }
 
-double* Pooling::forward(double *input) {
+float* Pooling::forward(float *input) {
     x = input;
 #ifdef CUDA
     cudaMemset(p, 0, sizeof(int)*(c*oh*ow));
@@ -91,14 +91,14 @@ double* Pooling::forward(double *input) {
     return y;
 }
 
-double* Pooling::backward(double *delta, double lr) {
+float* Pooling::backward(float *delta, float lr) {
 #ifdef CUDA
-    cudaMemset(d, 0, sizeof(double) * (c*ih*iw));
+    cudaMemset(d, 0, sizeof(float) * (c*ih*iw));
     const int TILE = 32/s/s*s;
     dim3 blocks((ow-1)/TILE+1, (oh-1)/TILE+1), threads(TILE, TILE);
     pooling_backward<<<blocks, threads>>>(delta, d, p, c, ih, iw, oh, ow, s);
 #else
-    memset(d, 0, sizeof(double) * (c*ih*iw));
+    memset(d, 0, sizeof(float) * (c*ih*iw));
     for (int i=0; i<c; i++) {
         for (int j=0; j<oh; j++) {
             for (int k=0; k<ow; k++) {

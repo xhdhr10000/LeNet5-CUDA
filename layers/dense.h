@@ -4,13 +4,13 @@
 class Dense {
 private:
     int ic, oc;
-    double *w, *b, *x, *y, *d, *dw, *db;
+    float *w, *b, *x, *y, *d, *dw, *db;
 
 public:
     Dense(int input_channels, int output_channels);
     ~Dense();
-    double* forward(double *input);
-    double* backward(double *delta, double lr);
+    float* forward(float *input);
+    float* backward(float *delta, float lr);
     void dump();
 
 protected:

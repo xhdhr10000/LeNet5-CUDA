@@ -12,15 +12,15 @@
 #endif /* CUDA */
 
 #ifdef CUDA
-__global__ void dense_init_params(double *w, double *b, int ic) {
+__global__ void dense_init_params(float *w, float *b, int ic) {
     int oi = threadIdx.x;
     curandState t;
     rand_init_gpu(&t, oi);
-    for (int i=0; i<ic; i++) w[oi*ic + i] = randn_gpu(&t, oi) / sqrt((double)ic);
+    for (int i=0; i<ic; i++) w[oi*ic + i] = randn_gpu(&t, oi) / sqrt((float)ic);
     b[oi] = 0;
 }
 
-__global__ void dense_forward(double *x, double *y, double *w, double *b, int ic) {
+__global__ void dense_forward(float *x, float *y, float *w, float *b, int ic) {
     int i = threadIdx.x;
     y[i] = 0;
     for (int j=0; j<ic; j++) {
@@ -29,7 +29,7 @@ __global__ void dense_forward(double *x, double *y, double *w, double *b, int ic
     y[i] += b[i];
 }
 
-__global__ void dense_backward(double *delta, double *d, double *dw, double *db, double *w, double *b, double *x, int ic, double lr) {
+__global__ void dense_backward(float *delta, float *d, float *dw, float *db, float *w, float *b, float *x, int ic, float lr) {
     int i = threadIdx.x;
     db[i] = delta[i];
     for (int j=0; j<ic; j++) {
@@ -52,21 +52,21 @@ Dense::Dense(int input_channels, int output_channels) {
 
 void Dense::init_params() {
 #ifdef CUDA
-    cudaMalloc(&w, sizeof(double) * (ic*oc));
-    cudaMalloc(&b, sizeof(double) * oc);
-    cudaMalloc(&d, sizeof(double) * ic);
-    cudaMalloc(&dw, sizeof(double) * (ic*oc));
-    cudaMalloc(&db, sizeof(double) * oc);
-    cudaMalloc(&y, sizeof(double) * oc);
+    cudaMalloc(&w, sizeof(float) * (ic*oc));
+    cudaMalloc(&b, sizeof(float) * oc);
+    cudaMalloc(&d, sizeof(float) * ic);
+    cudaMalloc(&dw, sizeof(float) * (ic*oc));
+    cudaMalloc(&db, sizeof(float) * oc);
+    cudaMalloc(&y, sizeof(float) * oc);
 
     dense_init_params<<<1, oc>>>(w, b, ic);
 #else
-    this->w = (double*)malloc(sizeof(double) * (ic*oc));
-    this->b = (double*)malloc(sizeof(double) * oc);
-    this->d = (double*)malloc(sizeof(double) * ic);
-    this->dw = (double*)malloc(sizeof(double) * (ic*oc));
-    this->db = (double*)malloc(sizeof(double) * oc);
-    this->y = (double*)malloc(sizeof(double) * oc);
+    this->w = (float*)malloc(sizeof(float) * (ic*oc));
+    this->b = (float*)malloc(sizeof(float) * oc);
+    this->d = (float*)malloc(sizeof(float) * ic);
+    this->dw = (float*)malloc(sizeof(float) * (ic*oc));
+    this->db = (float*)malloc(sizeof(float) * oc);
+    this->y = (float*)malloc(sizeof(float) * oc);
 
     rand_init();
     for (int i=0; i<ic*oc; i++) w[i] = randn() / sqrt(ic);
@@ -74,7 +74,7 @@ void Dense::init_params() {
 #endif
 }
 
-double* Dense::forward(double *input) {
+float* Dense::forward(float *input) {
     x = input;
 #ifdef CUDA
     dense_forward<<<1, oc>>>(x, y, w, b, ic);
@@ -90,12 +90,12 @@ double* Dense::forward(double *input) {
     return y;
 }
 
-double* Dense::backward(double *delta, double lr) {
+float* Dense::backward(float *delta, float lr) {
 #ifdef CUDA
-    cudaMemset(d, 0, sizeof(double) * ic);
+    cudaMemset(d, 0, sizeof(float) * ic);
     dense_backward<<<1, oc>>>(delta, d, dw, db, w, b, x, ic, lr);
 #else
-    memset(d, 0, sizeof(double) * ic);
+    memset(d, 0, sizeof(float) * ic);
     for (int i=0; i<oc; i++) {
         db[i] = delta[i];
         for (int j=0; j<ic; j++) {
@@ -114,9 +114,9 @@ double* Dense::backward(double *delta, double lr) {
 
 void Dense::dump() {
 #ifdef CUDA
-    double w[ic*oc], b[oc];
-    cudaMemcpy(w, this->w, sizeof(double)*ic*oc, cudaMemcpyDeviceToHost);
-    cudaMemcpy(b, this->b, sizeof(double)*oc, cudaMemcpyDeviceToHost);
+    float w[ic*oc], b[oc];
+    cudaMemcpy(w, this->w, sizeof(float)*ic*oc, cudaMemcpyDeviceToHost);
+    cudaMemcpy(b, this->b, sizeof(float)*oc, cudaMemcpyDeviceToHost);
 #endif
     printf("Dense_%d_%d:\n", ic, oc);
     int n = ic*5;

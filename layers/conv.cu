@@ -12,15 +12,15 @@
 #endif /* CUDA */
 
 #ifdef CUDA
-__global__ void conv_init_params(double *w, double *b, int ic, int k) {
+__global__ void conv_init_params(float *w, float *b, int ic, int k) {
     int oc = threadIdx.x;
     curandState t;
     rand_init_gpu(&t, oc);
-    for (int i=0; i<ic*k*k; i++) w[oc*ic*k*k + i] = 1;//randn_gpu(&t, oc) / sqrt((double)ic);
+    for (int i=0; i<ic*k*k; i++) w[oc*ic*k*k + i] = 1;//randn_gpu(&t, oc) / sqrt((float)ic);
     b[oc] = 0;
 }
 
-__global__ void conv_forward(double *x, double *y, double *w, double *b, int ic, int ih, int iw, int oc, int oh, int ow, int k, int s, int p) {
+__global__ void conv_forward(float *x, float *y, float *w, float *b, int ic, int ih, int iw, int oc, int oh, int ow, int k, int s, int p) {
     int row = blockIdx.y*blockDim.y + threadIdx.y;
     int col = blockIdx.x*blockDim.x + threadIdx.x;
     int chn = blockIdx.z*blockDim.z + threadIdx.z;
@@ -48,29 +48,39 @@ __global__ void conv_forward(double *x, double *y, double *w, double *b, int ic,
     y[chn*oh*ow + row*ow + col] += b[chn];
 }
 
-__global__ void conv_backward(double *delta, double *d, double *dw, double *db, double *w, double *b, double *x,
-  int oc, int oh, int ow, int ic, int ih, int iw, int k, int s, int p, double lr) {
+__global__ void conv_cal_db(float *delta, float *db) {
+    extern __shared__ float b[];
+    unsigned int tid = threadIdx.x;
+    unsigned int i = blockIdx.x*blockDim.x + threadIdx.x;
+    b[tid] = delta[i];
+    __syncthreads();
+
+    for (int s=blockDim.x/2; s>0; s>>=1) {
+        if (tid < s) b[tid] += b[tid+s];
+        __syncthreads();
+    }
+    if (tid == 0) db[blockIdx.y] = b[0];
+}
+
+__global__ void conv_backward(float *delta, float *d, float *dw, float *db, float *w, float *b, float *x,
+  int oc, int oh, int ow, int ic, int ih, int iw, int k, int s, int p, float lr) {
     int row = blockIdx.y*blockDim.y + threadIdx.y;
     int col = blockIdx.x*blockDim.x + threadIdx.x;
     int chn = blockIdx.z*blockDim.z + threadIdx.z;
     if (row >= oh || col >= ow || chn >= oc) return;
 
     // Calculate db
-    db[chn] += delta[chn*oh*ow + row*ow + col];
+    // db[chn] += delta[chn*oh*ow + row*ow + col];
 
     // Calculate dw
-    for (int iih=-p; iih<ih+p; iih+=s) {
-        if (iih+k >= ih) break;
-        for (int iiw=-p; iiw<iw+p; iiw+=s) {
-            if (iiw+k >= iw) break;
-            for (int iic=0; iic<ic; iic++) {
-                for (int dh=0; dh<k; dh++) {
-                    if (iih+dh < 0 || iih+dh >= ih) continue;
-                    for (int ddw=0; ddw<k; ddw++) {
-                        if (iiw+ddw < 0 || iiw+ddw >= iw) continue;
-                        dw[chn*ic*ih*iw + iic*ih*iw + dh*iw + ddw] += delta[chn*oh*ow + row*ow + col] * x[iic*ih*iw + (iih+dh)*iw + iiw+ddw];
-                    }
-                }
+    for (int iic=0; iic<ic; iic++) {
+        for (int dh=0; dh<k; dh++) {
+            int iih = row*s-p;
+            if (iih+dh < 0 || iih+dh >= ih) continue;
+            for (int ddw=0; ddw<k; ddw++) {
+                int iiw = col*s-p;
+                if (iiw+ddw < 0 || iiw+ddw >= iw) continue;
+                dw[chn*ic*ih*iw + iic*ih*iw + dh*iw + ddw] += delta[chn*oh*ow + row*ow + col] * x[iic*ih*iw + (iih+dh)*iw + iiw+ddw];
             }
         }
     }
@@ -83,24 +93,21 @@ __global__ void conv_backward(double *delta, double *d, double *dw, double *db, 
             sw[iic*k*k + row*k + col] = w[chn*ic*k*k + iic*k*k + row*k + col];
         __syncthreads();
         */
-        for (int iih=-p; iih<ih+p; iih+=s) {
-            if (iih+k >= ih) break;
-            for (int iiw=-p; iiw<iw+p; iiw+=s) {
-                if (iiw+k >= iw) break;
-                for (int wh=0; wh<k; wh++) {
-                    if (iih+wh < 0 || iih+wh >= ih) continue;
-                    for (int ww=0; ww<k; ww++) {
-                        if (iiw+ww < 0 || iiw+ww >= iw) continue;
-                        d[iic*ih*iw + (iih+wh)*iw + iiw+ww] += w[chn*ic*k*k + iic*k*k + wh*k + ww] * delta[chn*oh*ow + row*ow + col];
-                    }
-                }
+        for (int wh=0; wh<k; wh++) {
+            int iih = row*s-p;
+            if (iih+wh < 0 || iih+wh >= ih) continue;
+            for (int ww=0; ww<k; ww++) {
+                int iiw = col*s-p;
+                if (iiw+ww < 0 || iiw+ww >= iw) continue;
+                d[iic*ih*iw + (iih+wh)*iw + iiw+ww] += w[chn*ic*k*k + iic*k*k + wh*k + ww] * delta[chn*oh*ow + row*ow + col];
             }
         }
     }
     __syncthreads();
 
     // Update w & b
-    b[chn] -= lr * db[chn];
+    if (threadIdx.x == 0 && threadIdx.y == 0) atomicAdd(&b[chn], -lr * db[chn]);
+    // b[chn] -= lr * db[chn];
     for (int iic=0; iic<ic; iic++) {
         for (int wh=0; wh<k; wh++) {
             for (int ww=0; ww<k; ww++) {
@@ -127,21 +134,21 @@ Conv::Conv(int input_channels, int input_height, int input_width, int output_cha
 
 void Conv::init_params() {
 #ifdef CUDA
-    cudaMalloc(&w, sizeof(double) * oc*ic*k*k);
-    cudaMalloc(&b, sizeof(double) * oc);
-    cudaMalloc(&d, sizeof(double) * ic*ih*iw);
-    cudaMalloc(&dw, sizeof(double) * oc*ic*k*k);
-    cudaMalloc(&db, sizeof(double) * oc);
-    cudaMalloc(&y, sizeof(double) * oc*oh*ow);
+    cudaMalloc(&w, sizeof(float) * oc*ic*k*k);
+    cudaMalloc(&b, sizeof(float) * oc);
+    cudaMalloc(&d, sizeof(float) * ic*ih*iw);
+    cudaMalloc(&dw, sizeof(float) * oc*ic*k*k);
+    cudaMalloc(&db, sizeof(float) * oc);
+    cudaMalloc(&y, sizeof(float) * oc*oh*ow);
 
     conv_init_params<<<1, oc>>>(w, b, ic, k);
 #else
-    this->w = (double*)malloc(sizeof(double) * oc*ic*k*k);
-    this->b = (double*)malloc(sizeof(double) * oc);
-    this->d = (double*)malloc(sizeof(double) * ic*ih*iw);
-    this->dw = (double*)malloc(sizeof(double) * oc*ic*k*k);
-    this->db = (double*)malloc(sizeof(double) * oc);
-    this->y = (double*)malloc(sizeof(double) * oc*oh*ow);
+    this->w = (float*)malloc(sizeof(float) * oc*ic*k*k);
+    this->b = (float*)malloc(sizeof(float) * oc);
+    this->d = (float*)malloc(sizeof(float) * ic*ih*iw);
+    this->dw = (float*)malloc(sizeof(float) * oc*ic*k*k);
+    this->db = (float*)malloc(sizeof(float) * oc);
+    this->y = (float*)malloc(sizeof(float) * oc*oh*ow);
 
     rand_init();
     for (int i=0; i<oc*ic*k*k; i++) w[i] = 1;//randn() / sqrt(ic);
@@ -149,15 +156,15 @@ void Conv::init_params() {
 #endif
 }
 
-double* Conv::forward(double *input) {
+float* Conv::forward(float *input) {
     x = input;
 #ifdef CUDA
-    cudaMemset(y, 0, sizeof(double) * oc*oh*ow);
+    cudaMemset(y, 0, sizeof(float) * oc*oh*ow);
     const int TILE = 16, TILEZ = 3;
     dim3 blocks((ow-1)/TILE+1, (oh-1)/TILE+1, (oc-1)/TILEZ+1), threads(TILE, TILE, TILEZ);
     conv_forward<<<blocks, threads>>>(x, y, w, b, ic, ih, iw, oc, oh, ow, k, s, p);
 #else
-    memset(y, 0, sizeof(double) * oc*oh*ow);
+    memset(y, 0, sizeof(float) * oc*oh*ow);
     for (int oc=0; oc<this->oc; oc++) {
         int oh = 0, ow = 0;
         for (int ih=-p; ih<this->ih+p; ih+=s) {
@@ -185,18 +192,20 @@ double* Conv::forward(double *input) {
     return y;
 }
 
-double* Conv::backward(double *delta, double lr) {
+float* Conv::backward(float *delta, float lr) {
 #ifdef CUDA
-    cudaMemset(d, 0, sizeof(double) * ic*ih*iw);
-    cudaMemset(dw, 0, sizeof(double) * oc*ic*k*k);
-    cudaMemset(db, 0, sizeof(double) * oc);
+    cudaMemset(d, 0, sizeof(float) * ic*ih*iw);
+    cudaMemset(dw, 0, sizeof(float) * oc*ic*k*k);
+    cudaMemset(db, 0, sizeof(float) * oc);
     const int TILE = 16, TILEZ = 3;
+    dim3 bblocks((oh*ow-1)/TILE+1, oc), bthreads(TILE, 1);
+    conv_cal_db<<<bblocks, bthreads>>>(delta, db);
     dim3 blocks((ow-1)/TILE+1, (oh-1)/TILE+1, (oc-1)/TILEZ+1), threads(TILE, TILE, TILEZ);
     conv_backward<<<blocks, threads>>>(delta, d, dw, db, w, b, x, oc, oh, ow, ic, ih, iw, k, s, p, lr);
 #else
-    memset(d, 0, sizeof(double) * ic*ih*iw);
-    memset(dw, 0, sizeof(double) * oc*ic*k*k);
-    memset(db, 0, sizeof(double) * oc);
+    memset(d, 0, sizeof(float) * ic*ih*iw);
+    memset(dw, 0, sizeof(float) * oc*ic*k*k);
+    memset(db, 0, sizeof(float) * oc);
     for (int oc=0; oc<this->oc; oc++) {
         // Calculate db
         for (int oh=0; oh<this->oh; oh++) {
@@ -268,9 +277,9 @@ double* Conv::backward(double *delta, double lr) {
 
 void Conv::dump() {
 #ifdef CUDA
-    double w[oc*ic*k*k], b[oc];
-    cudaMemcpy(w, this->w, sizeof(double)*oc*ic*k*k, cudaMemcpyDeviceToHost);
-    cudaMemcpy(b, this->b, sizeof(double)*oc, cudaMemcpyDeviceToHost);
+    float w[oc*ic*k*k], b[oc];
+    cudaMemcpy(w, this->w, sizeof(float)*oc*ic*k*k, cudaMemcpyDeviceToHost);
+    cudaMemcpy(b, this->b, sizeof(float)*oc, cudaMemcpyDeviceToHost);
 #endif
     printf("Conv_(%d,%d,%d)_(%d,%d,%d)_%d_%d_%d:\n", ic, ih, iw, oc, oh, ow, k, s, p);
     int n = (k*10-3)/2;

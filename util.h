@@ -15,7 +15,7 @@ __device__ static void rand_init_gpu(curandState *t, int idx) {
     curand_init(clock64(), idx, 0, t);
 }
 
-__device__ static double randn_gpu(curandState *t, int idx) {
+__device__ static float randn_gpu(curandState *t, int idx) {
     return curand_normal(t);
 }
 #endif /* CUDA */
@@ -24,9 +24,9 @@ static void rand_init(void) {
     srand(clock());
 }
 
-static double randn(void) {
-    double x = (double)rand() / RAND_MAX;
-    double y = (double)rand() / RAND_MAX;
+static float randn(void) {
+    float x = (float)rand() / RAND_MAX;
+    float y = (float)rand() / RAND_MAX;
     return sqrt(-2 * log(x)) * cos(2 * M_PI * y);
 }
 
