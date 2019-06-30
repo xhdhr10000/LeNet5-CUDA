@@ -80,12 +80,12 @@ void test_pooling(double *input, int c, int h, int w, int s) {
 }
 
 void test_conv(double *input, int c, int h, int w, int oc, int k, int s, int p) {
-    Conv c(c, h, w, oc, k, s, p);
-    c.dump();
+    Conv conv(c, h, w, oc, k, s, p);
+    conv.dump();
 
     int oh = (h+2*p-k)/s+1;
     int ow = (w+2*p-k)/s+1;
-    double *doutput = c.forward(input);
+    double *doutput = conv.forward(input);
     double *output = (double*)malloc(sizeof(double) * oc*oh*ow);
     cudaMemcpy(output, doutput, sizeof(double) * oc*oh*ow, cudaMemcpyDeviceToHost);
 
@@ -111,8 +111,8 @@ void test_conv(double *input, int c, int h, int w, int oc, int k, int s, int p) 
     }
     cudaMemcpy(loss, output, sizeof(double) * oc*oh*ow, cudaMemcpyHostToDevice);
 
-    double *dd = c.backward(loss, 0.1);
-    c.dump();
+    double *dd = conv.backward(loss, 0.1);
+    conv.dump();
     double *d = (double*)malloc(sizeof(double)*c*h*w);
     cudaMemcpy(d, dd, sizeof(double)*c*h*w, cudaMemcpyDeviceToHost);
 

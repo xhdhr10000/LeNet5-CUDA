@@ -15,8 +15,8 @@
 __global__ void conv_init_params(double *w, double *b, int ic, int k) {
     int oc = threadIdx.x;
     curandState t;
-    rand_init_gpu(&t, oi);
-    for (int i=0; i<ic*k*k; i++) w[oc*ic*k*k + i] = randn_gpu(&t, oc) / sqrt((double)ic);
+    rand_init_gpu(&t, oc);
+    for (int i=0; i<ic*k*k; i++) w[oc*ic*k*k + i] = 1;//randn_gpu(&t, oc) / sqrt((double)ic);
     b[oc] = 0;
 }
 
@@ -26,11 +26,13 @@ __global__ void conv_forward(double *x, double *y, double *w, double *b, int ic,
     int chn = blockIdx.z*blockDim.z + threadIdx.z;
     if (row >= oh || col >= ow || chn >= oc) return;
 
-    __shared__ float sw[ic*k*k];
+    //__shared__ float sw[ic*k*k];
     for (int iic=0; iic<ic; iic++) {
+        /*
         if (row < k && col < k)
             sw[iic*k*k + row*k + col] = w[chn*ic*k*k + iic*k*k + row*k + col];
         __syncthreads();
+        */
 
         for (int iih=-p; iih<ih+p; iih+=s) {
             if (iih+k >= iw) break;
@@ -40,7 +42,7 @@ __global__ void conv_forward(double *x, double *y, double *w, double *b, int ic,
                     if (iih+wh < 0 || iih+wh >= ih) continue;
                     for (int ww=0; ww<k; ww++) {
                         if (iiw+ww < 0 || iiw+ww >= iw) continue;
-                        y[chn*oh*ow + row*ow + col] += sw[iic*k*k + wh*k + ww] * x[iic*ih*iw + (iih+wh)*iw + iiw+ww];
+                        y[chn*oh*ow + row*ow + col] += w[chn*ic*k*k + iic*k*k + wh*k + ww] * x[iic*ih*iw + (iih+wh)*iw + iiw+ww];
                     }
                 }
             }
@@ -68,9 +70,9 @@ __global__ void conv_backward(double *delta, double *d, double *dw, double *db, 
             for (int iic=0; iic<ic; iic++) {
                 for (int dh=0; dh<k; dh++) {
                     if (iih+dh < 0 || iih+dh >= ih) continue;
-                    for (int dw=0; dw<k; dw++) {
-                        if (iiw+dw < 0 || iiw+dw >= iw) continue;
-                        dw[chn*ic*ih*iw + iic*ih*iw + dh*iw + dw] += delta[chn*oh*ow + row*ow + col] * x[iic*ih*iw + (iih+dh)*iw + iiw+dw];
+                    for (int ddw=0; ddw<k; ddw++) {
+                        if (iiw+ddw < 0 || iiw+ddw >= iw) continue;
+                        dw[chn*ic*ih*iw + iic*ih*iw + dh*iw + ddw] += delta[chn*oh*ow + row*ow + col] * x[iic*ih*iw + (iih+dh)*iw + iiw+ddw];
                     }
                 }
             }
@@ -78,11 +80,13 @@ __global__ void conv_backward(double *delta, double *d, double *dw, double *db, 
     }
 
     // Calculate d
-    __shared__ float sw[ic*k*k];
+    //__shared__ float sw[ic*k*k];
     for (int iic=0; iic<ic; iic++) {
+        /*
         if (row < k && col < k)
             sw[iic*k*k + row*k + col] = w[chn*ic*k*k + iic*k*k + row*k + col];
         __syncthreads();
+        */
         for (int iih=-p; iih<ih+p; iih+=s) {
             if (iih+k >= ih) break;
             for (int iiw=-p; iiw<iw+p; iiw+=s) {
@@ -91,7 +95,7 @@ __global__ void conv_backward(double *delta, double *d, double *dw, double *db, 
                     if (iih+wh < 0 || iih+wh >= ih) continue;
                     for (int ww=0; ww<k; ww++) {
                         if (iiw+ww < 0 || iiw+ww >= iw) continue;
-                        d[iic*ih*iw + (iih+wh)*iw + iiw+ww] += sw[iic*k*k + wh*k + ww] * delta[chn*oh*ow + row*ow + col];
+                        d[iic*ih*iw + (iih+wh)*iw + iiw+ww] += w[chn*ic*k*k + iic*k*k + wh*k + ww] * delta[chn*oh*ow + row*ow + col];
                     }
                 }
             }
@@ -289,14 +293,14 @@ void Conv::dump() {
         }
     }
 
-    n = (oc*10-3)/2;
+    n = (this->oc*10-3)/2;
     for (int i=0; i<n; i++) printf("-");
     printf(" b ");
     for (int i=0; i<n; i++) printf("-");
     printf("\n");
-    for (int i=0; i<oc; i++) printf("%9.6lf ", b[i]);
+    for (int i=0; i<this->oc; i++) printf("%9.6lf ", b[i]);
     printf("\n");
-    for (int i=0; i<oc*10; i++) printf("-");
+    for (int i=0; i<this->oc*10; i++) printf("-");
     printf("\n\n");
 }
 
