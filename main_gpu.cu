@@ -149,7 +149,7 @@ int main() {
     }
 
     // test_pooling(dinput, c, h, w, 3);
-    test_conv(input, c, h, w, 1, 3, 1, 0);
+    test_conv(dinput, c, h, w, 1, 3, 1, 0);
 
     free(input);
     cudaFree(dinput);

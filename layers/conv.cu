@@ -34,22 +34,18 @@ __global__ void conv_forward(double *x, double *y, double *w, double *b, int ic,
         __syncthreads();
         */
 
-        for (int iih=-p; iih<ih+p; iih+=s) {
-            if (iih+k >= iw) break;
-            for (int iiw=-p; iiw<iw+p; iiw+=s) {
-                if (iiw+k >= iw) break;
-                for (int wh=0; wh<k; wh++) {
-                    if (iih+wh < 0 || iih+wh >= ih) continue;
-                    for (int ww=0; ww<k; ww++) {
-                        if (iiw+ww < 0 || iiw+ww >= iw) continue;
-                        y[chn*oh*ow + row*ow + col] += w[chn*ic*k*k + iic*k*k + wh*k + ww] * x[iic*ih*iw + (iih+wh)*iw + iiw+ww];
-                    }
-                }
+        for (int wh=0; wh<k; wh++) {
+            int iih = row*s-p+wh;
+            if (iih < 0 || iih >= ih) continue;
+            for (int ww=0; ww<k; ww++) {
+                int iiw = col*s-p+ww;
+                if (iiw < 0 || iiw >= iw) continue;
+                y[chn*oh*ow + row*ow + col] += w[chn*ic*k*k + iic*k*k + wh*k + ww] * x[iic*ih*iw + iih*iw + iiw];
             }
         }
-        __syncthreads();
-        y[chn*oh*ow + row*ow + col] += b[chn];
+        // __syncthreads();
     }
+    y[chn*oh*ow + row*ow + col] += b[chn];
 }
 
 __global__ void conv_backward(double *delta, double *d, double *dw, double *db, double *w, double *b, double *x,
