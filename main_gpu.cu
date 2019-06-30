@@ -132,7 +132,7 @@ void test_conv(float *input, int c, int h, int w, int oc, int k, int s, int p) {
 
 int main() {
     rand_init();
-    int c = 1, h = 5, w = 5;
+    int c = 3, h = 5, w = 5;
     float *input = (float*)malloc(sizeof(float) * c*h*w);
     for (int i=0; i<c*h*w; i++) input[i] = 1;//randn();
     float *dinput;
@@ -149,7 +149,7 @@ int main() {
     }
 
     // test_pooling(dinput, c, h, w, 3);
-    test_conv(dinput, c, h, w, 1, 3, 1, 0);
+    test_conv(dinput, c, h, w, 5, 3, 2, 2);
 
     free(input);
     cudaFree(dinput);

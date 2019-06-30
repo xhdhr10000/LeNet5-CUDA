@@ -48,10 +48,11 @@ __global__ void conv_forward(float *x, float *y, float *w, float *b, int ic, int
     y[chn*oh*ow + row*ow + col] += b[chn];
 }
 
-__global__ void conv_cal_db(float *delta, float *db) {
+__global__ void conv_cal_db(const float *delta, float *db, int oc, int oh, int ow) {
     extern __shared__ float b[];
     unsigned int tid = threadIdx.x;
-    unsigned int i = blockIdx.x*blockDim.x + threadIdx.x;
+    unsigned int i = blockIdx.y*oh*ow + blockIdx.x*blockDim.x + threadIdx.x;
+    if (i >= oc*oh*ow) return;
     b[tid] = delta[i];
     __syncthreads();
 
@@ -70,7 +71,9 @@ __global__ void conv_backward(float *delta, float *d, float *dw, float *db, floa
     if (row >= oh || col >= ow || chn >= oc) return;
 
     // Calculate db
-    // db[chn] += delta[chn*oh*ow + row*ow + col];
+    if (threadIdx.x == 0 && threadIdx.y == 0) {
+        for (int i=0; i<oh*ow; i++) db[chn] += delta[chn*oh*ow + i];
+    }
 
     // Calculate dw
     for (int iic=0; iic<ic; iic++) {
@@ -80,7 +83,8 @@ __global__ void conv_backward(float *delta, float *d, float *dw, float *db, floa
             for (int ddw=0; ddw<k; ddw++) {
                 int iiw = col*s-p;
                 if (iiw+ddw < 0 || iiw+ddw >= iw) continue;
-                dw[chn*ic*ih*iw + iic*ih*iw + dh*iw + ddw] += delta[chn*oh*ow + row*ow + col] * x[iic*ih*iw + (iih+dh)*iw + iiw+ddw];
+                atomicAdd(&dw[chn*ic*k*k + iic*k*k + dh*k + ddw],
+                    delta[chn*oh*ow + row*ow + col] * x[iic*ih*iw + (iih+dh)*iw + iiw+ddw]);
             }
         }
     }
@@ -99,19 +103,22 @@ __global__ void conv_backward(float *delta, float *d, float *dw, float *db, floa
             for (int ww=0; ww<k; ww++) {
                 int iiw = col*s-p;
                 if (iiw+ww < 0 || iiw+ww >= iw) continue;
-                d[iic*ih*iw + (iih+wh)*iw + iiw+ww] += w[chn*ic*k*k + iic*k*k + wh*k + ww] * delta[chn*oh*ow + row*ow + col];
+                atomicAdd(&d[iic*ih*iw + (iih+wh)*iw + iiw+ww],
+                    w[chn*ic*k*k + iic*k*k + wh*k + ww] * delta[chn*oh*ow + row*ow + col]);
             }
         }
     }
     __syncthreads();
 
     // Update w & b
-    if (threadIdx.x == 0 && threadIdx.y == 0) atomicAdd(&b[chn], -lr * db[chn]);
-    // b[chn] -= lr * db[chn];
-    for (int iic=0; iic<ic; iic++) {
-        for (int wh=0; wh<k; wh++) {
-            for (int ww=0; ww<k; ww++) {
-                w[chn*ic*k*k + iic*k*k + wh*k + ww] -= lr * dw[chn*ic*k*k + iic*k*k + wh*k + ww];
+    if (threadIdx.x == 0 && threadIdx.y == 0) {
+        atomicAdd(&b[chn], -lr * db[chn]);
+        for (int iic=0; iic<ic; iic++) {
+            for (int wh=0; wh<k; wh++) {
+                for (int ww=0; ww<k; ww++) {
+                    atomicAdd(&w[chn*ic*k*k + iic*k*k + wh*k + ww],
+                        -lr * dw[chn*ic*k*k + iic*k*k + wh*k + ww]);
+                }
             }
         }
     }
@@ -197,9 +204,11 @@ float* Conv::backward(float *delta, float lr) {
     cudaMemset(d, 0, sizeof(float) * ic*ih*iw);
     cudaMemset(dw, 0, sizeof(float) * oc*ic*k*k);
     cudaMemset(db, 0, sizeof(float) * oc);
+
     const int TILE = 16, TILEZ = 3;
-    dim3 bblocks((oh*ow-1)/TILE+1, oc), bthreads(TILE, 1);
-    conv_cal_db<<<bblocks, bthreads>>>(delta, db);
+    //dim3 bblocks((oh*ow-1)/TILE+1, oc), bthreads(TILE, 1);
+    //conv_cal_db<<<bblocks, bthreads, sizeof(float)*oh*ow>>>(delta, db, oc, oh, ow);
+
     dim3 blocks((ow-1)/TILE+1, (oh-1)/TILE+1, (oc-1)/TILEZ+1), threads(TILE, TILE, TILEZ);
     conv_backward<<<blocks, threads>>>(delta, d, dw, db, w, b, x, oc, oh, ow, ic, ih, iw, k, s, p, lr);
 #else
