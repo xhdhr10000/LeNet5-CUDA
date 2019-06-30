@@ -1,6 +1,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include "common.h"
+#include "layers/conv.h"
 #include "layers/dense.h"
 #include "layers/pooling.h"
 
@@ -75,15 +76,65 @@ void test_pooling(double *input, int c, int h, int w, int s) {
 
     free(d);
     free(output);
-    cudaFree(dd);
+    cudaFree(loss);
+}
+
+void test_conv(double *input, int c, int h, int w, int oc, int k, int s, int p) {
+    Conv c(c, h, w, oc, k, s, p);
+    c.dump();
+
+    int oh = (h+2*p-k)/s+1;
+    int ow = (w+2*p-k)/s+1;
+    double *doutput = c.forward(input);
+    double *output = (double*)malloc(sizeof(double) * oc*oh*ow);
+    cudaMemcpy(output, doutput, sizeof(double) * oc*oh*ow, cudaMemcpyDeviceToHost);
+
+    printf("Output:\n");
+    for (int i=0; i<oc; i++) {
+        for (int j=0; j<oh; j++) {
+            for (int k=0; k<ow; k++) printf("%9.6f ", output[i*oh*ow + j*ow + k]);
+            printf("\n");
+        }
+        printf("\n");
+    }
+
+    double *loss;
+    cudaMalloc(&loss, sizeof(double) * oc*oh*ow);
+    for (int i=0; i<oc*oh*ow; i++) output[i] = 2;
+    printf("\nLoss:\n");
+    for (int i=0; i<oc; i++) {
+        for (int j=0; j<oh; j++) {
+            for (int k=0; k<ow; k++) printf("%9.6f ", output[i*oh*ow + j*ow + k]);
+            printf("\n");
+        }
+        printf("\n");
+    }
+    cudaMemcpy(loss, output, sizeof(double) * oc*oh*ow, cudaMemcpyHostToDevice);
+
+    double *dd = c.backward(loss, 0.1);
+    c.dump();
+    double *d = (double*)malloc(sizeof(double)*c*h*w);
+    cudaMemcpy(d, dd, sizeof(double)*c*h*w, cudaMemcpyDeviceToHost);
+
+    printf("Output loss:\n");
+    for (int i=0; i<c; i++) {
+        for (int j=0; j<h; j++) {
+            for (int k=0; k<w; k++) printf("%9.6f ", d[i*h*w + j*w + k]);
+            printf("\n");
+        }
+        printf("\n");
+    }
+
+    free(d);
+    free(output);
     cudaFree(loss);
 }
 
 int main() {
     rand_init();
-    int c = 2, h = 27, w = 27;
+    int c = 1, h = 5, w = 5;
     double *input = (double*)malloc(sizeof(double) * c*h*w);
-    for (int i=0; i<c*h*w; i++) input[i] = randn();
+    for (int i=0; i<c*h*w; i++) input[i] = 1;//randn();
     double *dinput;
     cudaMalloc(&dinput, sizeof(double) * c*h*w);
     cudaMemcpy(dinput, input, sizeof(double) * c*h*w, cudaMemcpyHostToDevice);
@@ -97,7 +148,8 @@ int main() {
         printf("\n");
     }
 
-    test_pooling(dinput, c, h, w, 3);
+    // test_pooling(dinput, c, h, w, 3);
+    test_conv(input, c, h, w, 1, 3, 1, 0);
 
     free(input);
     cudaFree(dinput);

@@ -16,13 +16,7 @@ public:
 
 protected:
     void init_params(int idx=0);
-#ifdef CUDA
-    __device__ __host__
-#endif
     int inline ii(int c, int h, int w) { return c*ih*iw + h*iw + w; }
-#ifdef CUDA
-    __device__ __host__
-#endif
     int inline oi(int c, int h, int w) { return c*oh*ow + h*ow + w; }
 };
 

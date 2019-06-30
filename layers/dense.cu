@@ -50,7 +50,7 @@ Dense::Dense(int input_channels, int output_channels) {
     this->init_params();
 }
 
-void Dense::init_params(int idx) {
+void Dense::init_params() {
 #ifdef CUDA
     cudaMalloc(&w, sizeof(double) * (ic*oc));
     cudaMalloc(&b, sizeof(double) * oc);
@@ -68,6 +68,7 @@ void Dense::init_params(int idx) {
     this->db = (double*)malloc(sizeof(double) * oc);
     this->y = (double*)malloc(sizeof(double) * oc);
 
+    rand_init();
     for (int i=0; i<ic*oc; i++) w[i] = randn() / sqrt(ic);
     for (int i=0; i<oc; i++) b[i] = 0;
 #endif

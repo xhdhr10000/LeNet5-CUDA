@@ -14,7 +14,7 @@ public:
     void dump();
 
 protected:
-    void init_params(int idx=0);
+    void init_params();
 };
 
 #endif
