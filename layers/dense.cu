@@ -34,7 +34,7 @@ __global__ void dense_backward(float *delta, float *d, float *dw, float *db, flo
     db[i] = delta[i];
     for (int j=0; j<ic; j++) {
         dw[i*ic+j] = delta[i] * x[j];
-        d[j] += delta[i] * w[i*ic+j];
+        atomicAdd(&d[j], delta[i] * w[i*ic+j]);
     }
     __syncthreads();
 

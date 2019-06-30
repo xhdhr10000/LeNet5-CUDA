@@ -30,8 +30,8 @@ void test_dense(float *input, int input_channel, int output_channel) {
 
     printf("*** Step 3: backward ***\n");
     float *ddelta = d.backward(loss, 0.1);
-    float *delta = (float*)malloc(sizeof(float) * output_channel);
-    cudaMemcpy(delta, ddelta, sizeof(float) * output_channel, cudaMemcpyDeviceToHost);
+    float *delta = (float*)malloc(sizeof(float) * input_channel);
+    cudaMemcpy(delta, ddelta, sizeof(float) * input_channel, cudaMemcpyDeviceToHost);
     printf("Back-prop delta: ");
     for (int i=0; i<input_channel; i++) printf("%9.6f ", delta[i]);
     printf("\n\n");
