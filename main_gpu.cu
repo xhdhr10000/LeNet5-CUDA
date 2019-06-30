@@ -117,7 +117,7 @@ void test_conv(float *input, int c, int h, int w, int oc, int k, int s, int p) {
         printf("\n");
     }
 
-    for (int i=0; i<oc*oh*ow; i++) output[i] = 2;
+    for (int i=0; i<oc*oh*ow; i++) output[i] = randn();
     printf("\nLoss:\n");
     for (int i=0; i<oc; i++) {
         for (int j=0; j<oh; j++) {
